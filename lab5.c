@@ -34,7 +34,7 @@
 float calculateExtent(float *min, float *max) {
     float extent[3]; // Store the extents in X, Y, and Z directions
     float E; // Largest extent of the bounding box
-    
+
     // Calculate the extents in X, Y, and Z directions
     for (int i = 0; i < 3; i++) {
         extent[i] = max[i] - min[i];
@@ -83,11 +83,51 @@ char *getOutputFilename(const char *input_filename) {
     return output_filename;
 }
 
+// Function to calculate bounding box
+void calculateBoundingBox(double *vertices, int num_vertices, float *min, float *max, float *center) {
+    // Initialize min and max to the first vertex
+    for (int i = 0; i < 3; i++) {
+        min[i] = vertices[i * 3]; // Initialize with the value of the first vertex
+        max[i] = vertices[i * 3]; // Initialize with the value of the first vertex
+    }
+
+    // Iterate through all vertices to find min and max along each axis
+    for (int i = 0; i < num_vertices; i++) {
+        // X axis
+        if (vertices[i * 3] < min[0]) {
+            min[0] = vertices[i * 3];
+        }
+        if (vertices[i * 3] > max[0]) {
+            max[0] = vertices[i * 3];
+        }
+        // Y axis
+        if (vertices[i * 3 + 1] < min[1]) {
+            min[1] = vertices[i * 3 + 1];
+        }
+        if (vertices[i * 3 + 1] > max[1]) {
+            max[1] = vertices[i * 3 + 1];
+        }
+        // Z axis
+        if (vertices[i * 3 + 2] < min[2]) {
+            min[2] = vertices[i * 3 + 2];
+        }
+        if (vertices[i * 3 + 2] > max[2]) {
+            max[2] = vertices[i * 3 + 2];
+        }
+    }
+
+    // Calculate center
+    for (int i = 0; i < 3; i++) {
+        center[i] = (min[i] + max[i]) / 2.0;
+    }
+}
+
+
 int main(int argc, char *argv[]) {
     // Step 1: Setup
     // Check command-line arguments
-    if (argc != 2) {
-        printf("Usage: %s <input_file>\n", argv[0]);
+    if (argc != 5) {
+        printf("Usage: %s <input_file> X Y Z\n", argv[0]);
         return 1;
     }
 
@@ -164,49 +204,8 @@ int main(int argc, char *argv[]) {
     // Step 5: Calculate bounding box
     // will have max, min, and center of verticies read into verticies array
     // need to store X, Y, and Z, and so min and max will be an array with size 3
-    float min[3];
-    float max[3];
-    float center[3];
-    //step through all vertices to find max in X, Y, Z independently
-    //step through all vertices to find min in X,Y,Z independently
-    //center splits the difference between min and max
-    // Initialize min and max to the first vertex
-    // Initialize min and max to the first vertex
-    for (int i = 0; i < 3; i++) {
-        min[i] = vertices[i * 3]; // Initialize with the value of the first vertex
-        max[i] = vertices[i * 3]; // Initialize with the value of the first vertex
-    }
-
-    // Iterate through all vertices to find min and max along each axis
-    for (int i = 0; i < num_vertices; i++) {
-        // X axis
-        if (vertices[i * 3] < min[0]) {
-            min[0] = vertices[i * 3];
-        }
-        if (vertices[i * 3] > max[0]) {
-            max[0] = vertices[i * 3];
-        }
-        // Y axis
-        if (vertices[i * 3 + 1] < min[1]) {
-            min[1] = vertices[i * 3 + 1];
-        }
-        if (vertices[i * 3 + 1] > max[1]) {
-            max[1] = vertices[i * 3 + 1];
-        }
-        // Z axis
-        if (vertices[i * 3 + 2] < min[2]) {
-            min[2] = vertices[i * 3 + 2];
-        }
-        if (vertices[i * 3 + 2] > max[2]) {
-            max[2] = vertices[i * 3 + 2];
-        }
-    }
-
-
-    // Calculate center
-    for (int i = 0; i < 3; i++) {
-        center[i] = (min[i] + max[i]) / 2.0;
-    }
+    float min[3], max[3], center[3];
+    calculateBoundingBox(vertices, num_vertices, min, max, center);
 
     // Print or use min, max, and center as needed
     printf("Minimum X: %f\n", min[0]);
@@ -217,6 +216,7 @@ int main(int argc, char *argv[]) {
     printf("Maximum Z: %f\n", max[2]);
     printf("Center of bounding box: (%f, %f, %f)\n", center[0], center[1], center[2]);
 
+
     // Step 6: Calculate E
     float E = calculateExtent(min, max);
     printf("Largest extent E: %f\n", E);
@@ -224,18 +224,29 @@ int main(int argc, char *argv[]) {
 
     // Step 7: Calculate camera position and orientation
     // (To be implemented)
+    float camera[3];
+
 
     // Step 8: Move and scale the camera
-    // (To be implemented)
+    camera[0] = 1.5*E*camera[0] + center[0];
+    camera[1] = 1.5*E*camera[1] + center[1];
+    camera[2] = 1.5*E*camera[2] + center[2];
+    printf("Camera(move and scale)-> X: %f\tY: %f\tZ: %f\n\n",camera[0],camera[1],camera[2]);
+
 
     // Step 9: Determine 3D coordinates bounding the image
     // (To be implemented)
 
+
     // Step 10: Render pixels
     // (To be implemented)
+    unsigned char *pixels = (unsigned char *)calloc(256*256,1);
+
 
     // Step 11: Write ppm image
-    // (To be implemented)
+    fprintf(output_file,"P5 %d %d 255\n",256,256);
+    fwrite(pixels,256*256,1,output_file);
+
 
     // Close files
     fclose(input_file);
