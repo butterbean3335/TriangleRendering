@@ -46,7 +46,7 @@ void parseHeader(FILE *input_file, int *num_vertices, int *num_faces) {
 
 // Function to generate output filename from input filename
 char *getOutputFilename(const char *input_filename) {
-    char *output_filename = malloc(strlen(input_filename) + 5); // 4 for ".ppm", 1 for null terminator
+    char *output_filename = malloc(strlen(input_filename) + 5); //4 for ".ppm", 1 for null terminator
     if (output_filename == NULL) {
         printf("Memory allocation error");
         exit(1);
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
     char *output_filename = getOutputFilename(argv[1]);
 
     // Open input file for reading
-    FILE *input_file = fopen(argv[1], "r");
+    FILE *input_file = fopen(argv[1], "rb");
     if (input_file == NULL) {
         printf("Error opening input file");
         free(output_filename);
@@ -96,17 +96,123 @@ int main(int argc, char *argv[]) {
     printf("Number of vertices: %d\n", num_vertices);
     printf("Number of faces: %d\n", num_faces);
 
+    // Consume the newline character after parsing the header
+    // Move the file pointer back to the current position
+    fseek(input_file, 0, SEEK_SET);
+    // Move the file pointer to the 10th line
+    int line_number = 0;
+    char line[256];
+
+    while (fgets(line, sizeof(line), input_file) != NULL) {
+        line_number++;
+        if (line_number == 9) {
+            break;
+        }
+    }
+
+    // Read and print characters from the current position until a newline or EOF is encountered
+    /*char c;
+    while ((c = fgetc(input_file)) != '\n' && c != EOF) {
+        putchar(c);
+    }
+    putchar('\n'); // Print a newline at the end for formatting
+    */
+
     // Step 3: Allocate space for vertices and faces
-    // (To be implemented)
+    double *vertices = (double *)calloc(num_vertices * 3, sizeof(double)); //stores __ __ __
+    int *faces = (int *)calloc(num_faces * 4, sizeof(int));               //stores 3 __ __ __
 
     // Step 4: Read vertices and faces from input file
-    // (To be implemented)
+    // Read vertices
+    int i;
+    for (i = 0; i < num_vertices; i++) {
+        fscanf(input_file, "%lf %lf %lf", &vertices[i * 3], &vertices[i * 3 + 1], &vertices[i * 3 + 2]);
+        //printf("%lf %lf %lf\n", vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
+    }
+
+    // Consume the newline character after reading vertices
+
+    // Read faces
+    for (i = 0; i < num_faces; i++) {
+        fscanf(input_file, "%d %d %d %d", &faces[i * 4], &faces[i * 4 + 1], &faces[i * 4 + 2], &faces[i * 4 + 3]);
+        //printf("%d %d %d %d\n", faces[i * 4], faces[i * 4 + 1], faces[i * 4 + 2], faces[i * 4 + 3]);
+    }
+
+
 
     // Step 5: Calculate bounding box
-    // (To be implemented)
+    // will have max, min, and center of verticies read into verticies array
+    // need to store X, Y, and Z, and so min and max will be an array with size 3
+    float min[3];
+    float max[3];
+    float center[3];
+    //step through all vertices to find max in X, Y, Z independently
+    //step through all vertices to find min in X,Y,Z independently
+    //center splits the difference between min and max
+    // Initialize min and max to the first vertex
+    // Initialize min and max to the first vertex
+    for (int i = 0; i < 3; i++) {
+        min[i] = vertices[i * 3]; // Initialize with the value of the first vertex
+        max[i] = vertices[i * 3]; // Initialize with the value of the first vertex
+    }
+
+    // Iterate through all vertices to find min and max along each axis
+    for (int i = 0; i < num_vertices; i++) {
+        // X axis
+        if (vertices[i * 3] < min[0]) {
+            min[0] = vertices[i * 3];
+        }
+        if (vertices[i * 3] > max[0]) {
+            max[0] = vertices[i * 3];
+        }
+        // Y axis
+        if (vertices[i * 3 + 1] < min[1]) {
+            min[1] = vertices[i * 3 + 1];
+        }
+        if (vertices[i * 3 + 1] > max[1]) {
+            max[1] = vertices[i * 3 + 1];
+        }
+        // Z axis
+        if (vertices[i * 3 + 2] < min[2]) {
+            min[2] = vertices[i * 3 + 2];
+        }
+        if (vertices[i * 3 + 2] > max[2]) {
+            max[2] = vertices[i * 3 + 2];
+        }
+    }
+
+
+    // Calculate center
+    for (int i = 0; i < 3; i++) {
+        center[i] = (min[i] + max[i]) / 2.0;
+    }
+
+    // Print or use min, max, and center as needed
+    printf("Minimum X: %f\n", min[0]);
+    printf("Minimum Y: %f\n", min[1]);
+    printf("Minimum Z: %f\n", min[2]);
+    printf("Maximum X: %f\n", max[0]);
+    printf("Maximum Y: %f\n", max[1]);
+    printf("Maximum Z: %f\n", max[2]);
+    printf("Center of bounding box: (%f, %f, %f)\n", center[0], center[1], center[2]);
 
     // Step 6: Calculate E
-    // (To be implemented)
+    float extent[3]; // Store the extents in X, Y, and Z directions
+    float E; // Largest extent of the bounding box
+
+    // Calculate the extents in X, Y, and Z directions
+    for (int i = 0; i < 3; i++) {
+        extent[i] = max[i] - min[i];
+    }
+
+    // Find the largest extent among X, Y, and Z
+    E = extent[0];
+    for (int i = 1; i < 3; i++) {
+        if (extent[i] > E) {
+            E = extent[i];
+        }
+    }
+    //printf("Largest extent E: %f\n", E);
 
     // Step 7: Calculate camera position and orientation
     // (To be implemented)
@@ -127,6 +233,8 @@ int main(int argc, char *argv[]) {
     fclose(input_file);
     fclose(output_file);
     free(output_filename);
+    free(vertices);
+    free(faces);
 
     return 0;
 }
