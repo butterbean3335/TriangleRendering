@@ -30,6 +30,27 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Function to calculate the largest extent E
+float calculateExtent(float *min, float *max) {
+    float extent[3]; // Store the extents in X, Y, and Z directions
+    float E; // Largest extent of the bounding box
+    
+    // Calculate the extents in X, Y, and Z directions
+    for (int i = 0; i < 3; i++) {
+        extent[i] = max[i] - min[i];
+    }
+
+    // Find the largest extent among X, Y, and Z
+    E = extent[0];
+    for (int i = 1; i < 3; i++) {
+        if (extent[i] > E) {
+            E = extent[i];
+        }
+    }
+
+    return E;
+}
+
 // Function to parse input file header
 void parseHeader(FILE *input_file, int *num_vertices, int *num_faces) {
     char line[256];
@@ -197,22 +218,9 @@ int main(int argc, char *argv[]) {
     printf("Center of bounding box: (%f, %f, %f)\n", center[0], center[1], center[2]);
 
     // Step 6: Calculate E
-    float extent[3]; // Store the extents in X, Y, and Z directions
-    float E; // Largest extent of the bounding box
+    float E = calculateExtent(min, max);
+    printf("Largest extent E: %f\n", E);
 
-    // Calculate the extents in X, Y, and Z directions
-    for (int i = 0; i < 3; i++) {
-        extent[i] = max[i] - min[i];
-    }
-
-    // Find the largest extent among X, Y, and Z
-    E = extent[0];
-    for (int i = 1; i < 3; i++) {
-        if (extent[i] > E) {
-            E = extent[i];
-        }
-    }
-    //printf("Largest extent E: %f\n", E);
 
     // Step 7: Calculate camera position and orientation
     // (To be implemented)
