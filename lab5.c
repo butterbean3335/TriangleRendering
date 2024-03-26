@@ -30,7 +30,36 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 
+#define ROWS 256
+#define COLS 256
+
+void rotate (float objVector[3], float rotX[3][3], float rotY[3][3], float rotZ[3][3], float result[3])
+{
+    int row,col;
+    float tmp1[3] = {0,0,0};
+    float tmp2[3] = {0,0,0};
+    // ROTATE X
+    for(col = 0; col < 3; col++) {
+        for(row = 0; row < 3; row++) {
+            tmp1[col] += objVector[row] * rotX[row][col];
+        }    
+    }
+    // ROTATE Y
+    for(col = 0; col < 3; col++) {
+        for(row = 0; row < 3; row++) {
+            tmp2[col] += tmp1[row] * rotY[row][col];
+        }    
+    }
+    // ROTATE Z
+    for(col = 0; col < 3; col++) {
+        for(row = 0; row < 3; row++) {
+            result[col] += tmp2[row] * rotZ[row][col];
+        }    
+    }
+
+}
 // Function to calculate the largest extent E
 float calculateExtent(float *min, float *max) {
     float extent[3]; // Store the extents in X, Y, and Z directions
@@ -156,22 +185,10 @@ void calculateCamera(float xAngle, float yAngle, float zAngle, float *camera, fl
         }    
     }
     
-    // Rotate up vector
-    for (col = 0; col < 3; col++) {
-        for (row = 0; row < 3; row++) {
-            tmp1[col] += up[row] * rotateXMatrix[row][col];
-        }    
-    }
-    for (col = 0; col < 3; col++) {
-        for (row = 0; row < 3; row++) {
-            tmp2[col] += tmp1[row] * rotateYMatrix[row][col];
-        }    
-    }
-    for (col = 0; col < 3; col++) {
-        for (row = 0; row < 3; row++) {
-            upRotated[col] += tmp2[row] * rotateZMatrix[row][col];
-        }    
-    }
+    rotate(up,rotateXMatrix,rotateYMatrix,rotateZMatrix,upRotated);
+    up[0] = upRotated[0];
+    up[1] = upRotated[1];
+    up[2] = upRotated[2];
     
     // Update camera and up vectors
     for (int i = 0; i < 3; i++) {
@@ -179,6 +196,73 @@ void calculateCamera(float xAngle, float yAngle, float zAngle, float *camera, fl
         up[i] = upRotated[i];
     }
 }
+
+float *sumVectors(float vector1[3], float vector2[3], float result[3]){
+    for(int i=0; i<3; i++){
+        result[i] = vector1[i]+vector2[i];
+    }
+}
+
+
+void subVectors(float *vector1, float *vector2, float *result) {
+    for (int i = 0; i < 3; i++) {
+        result[i] = vector1[i] - vector2[i];
+    }
+}
+
+
+float *multVector(float f, float vector[3]){
+    static float result[3] = {0};
+    for(int i=0; i<3; i++){
+        result[i] = f * vector[i];
+    }
+    return result;
+}
+
+float *crossProduct(float vector1[3], float vector2[3], float result[3]){
+    result[0] = (vector1[1] * vector2[2]) - (vector1[2]*vector2[1]);
+    result[1] = (vector1[2] * vector2[0]) - (vector1[0]*vector2[2]);
+    result[2] = (vector1[0] * vector2[1]) - (vector1[1]*vector2[0]);
+}
+
+float dotProduct(float vector1[3], float vector2[3]){
+    float result;
+    result = 0;
+    result = ((vector1[0] * vector2[0]) + (vector1[1]*vector2[1]) + (vector2[1] * vector2[2]));
+    return result;
+}
+
+float magnitude(float vec[3]) {
+    return sqrt(pow(vec[0], 2) + pow(vec[1], 2) + pow(vec[2], 2));
+}
+
+// Function to determine 3D coordinates bounding the image
+void determineImageBounds(float *center, float *camera, float *up, float E, float aspect_ratio, float *left, float *right, float *top, float *bottom, float *topleft) {
+    // Calculate left and right vectors
+    float temp[3];
+    subVectors(center, camera, temp);
+    crossProduct(up, temp, left);
+    float a = magnitude(left);
+    for (int i = 0; i < 3; i++) {
+        left[i] = (E / (2 * a)) * left[i] + center[i];
+    }
+    crossProduct(temp, up, right);
+    for (int i = 0; i < 3; i++) {
+        right[i] = (E / (2 * a)) * right[i] + center[i];
+    }
+
+    // Calculate top and bottom vectors
+    for (int i = 0; i < 3; i++) {
+        top[i] = (E / 2) * up[i] + center[i];
+        bottom[i] = (-1 * E / 2) * up[i] + center[i];
+    }
+
+    // Calculate top left corner
+    for (int i = 0; i < 3; i++) {
+        topleft[i] = (E / 2) * up[i] + left[i];
+    }
+}
+
 
 
 int main(int argc, char *argv[]) {
@@ -218,7 +302,7 @@ int main(int argc, char *argv[]) {
     // Consume the newline character after parsing the header
     // Move the file pointer back to the current position
     fseek(input_file, 0, SEEK_SET);
-    // Move the file pointer to the 10th line
+    // Move the file pointer to the 10th line, standard for ply files
     int line_number = 0;
     char line[256];
 
@@ -234,7 +318,7 @@ int main(int argc, char *argv[]) {
     while ((c = fgetc(input_file)) != '\n' && c != EOF) {
         putchar(c);
     }
-    putchar('\n'); // Print a newline at the end for formatting
+    putchar('\n'); 
     */
 
     // Step 3: Allocate space for vertices and faces
@@ -248,8 +332,6 @@ int main(int argc, char *argv[]) {
         fscanf(input_file, "%lf %lf %lf", &vertices[i * 3], &vertices[i * 3 + 1], &vertices[i * 3 + 2]);
         //printf("%lf %lf %lf\n", vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
     }
-
-    // Consume the newline character after reading vertices
 
     // Read faces
     for (i = 0; i < num_faces; i++) {
@@ -266,18 +348,19 @@ int main(int argc, char *argv[]) {
     calculateBoundingBox(vertices, num_vertices, min, max, center);
 
     // Print or use min, max, and center as needed
-    //printf("Minimum X: %f\n", min[0]);
-    //printf("Minimum Y: %f\n", min[1]);
-    //printf("Minimum Z: %f\n", min[2]);
-    //printf("Maximum X: %f\n", max[0]);
-    //printf("Maximum Y: %f\n", max[1]);
-    //printf("Maximum Z: %f\n", max[2]);
-    //printf("Center of bounding box: (%f, %f, %f)\n", center[0], center[1], center[2]);
+    printf("Bounding Box:\n");
+    printf("Minimum X: %f\n", min[0]);
+    printf("Minimum Y: %f\n", min[1]);
+    printf("Minimum Z: %f\n", min[2]);
+    printf("Maximum X: %f\n", max[0]);
+    printf("Maximum Y: %f\n", max[1]);
+    printf("Maximum Z: %f\n", max[2]);
+    printf("Center of bounding box: (%f, %f, %f)\n", center[0], center[1], center[2]);
 
 
     // Step 6: Calculate E
     float E = calculateExtent(min, max);
-    //printf("Largest extent E: %f\n", E);
+    printf("Largest extent E: %f\n", E);
 
 
     // Step 7: Calculate camera position and orientation
@@ -291,20 +374,36 @@ int main(int argc, char *argv[]) {
         camera[i] = 1.5*E*camera[i] + center[i];
     }
     printf("Camera(move and scale)-> X: %f\tY: %f\tZ: %f\n",camera[0],camera[1],camera[2]);
-
+    printf("Up(move and scale)-> X: %f\tY: %f\tZ: %f\n",up[0],up[1],up[2]);
 
     // Step 9: Determine 3D coordinates bounding the image
-    // (To be implemented)
+    float left[3], right[3], top[3], bottom[3], topleft[3];
+
+    determineImageBounds(center, camera, up, E, ROWS/COLS, left, right, top, bottom, topleft);
+    printf("camera left/right: \t\t(%0.1f %0.1f %0.1f) \t(%0.1f %0.1f %0.1f)\n", left[0], left[1], left[2], right[0], right[1], right[2]);
+    printf("camera top/bottom/topleft: \t(%0.1f %0.1f %0.1f) \t\t(%0.1f %0.1f %0.1f) \t(%0.1f %0.1f %0.1f)\n", top[0], top[1], top[2], bottom[0], bottom[1], bottom[2], topleft[0], topleft[1], topleft[2]);
 
 
     // Step 10: Render pixels
     // (To be implemented)
-    unsigned char *pixels = (unsigned char *)calloc(256*256,1);
+    float zbuffer = 999999;
+    printf("Rendering...\n");
+    unsigned char *pixels = (unsigned char *)calloc(ROWS*COLS,1);
+    for(int r = 0; r<ROWS; r++){
+        printf("%d ", r);
+        for(int c = 0; c<COLS; c++){
+            float zbuffer = 999999;     //reset for every pixel, stores dist to closest tri
+            for(int i=0; i<num_faces; i++){
+
+            }
+        }
+    }
+
 
 
     // Step 11: Write ppm image
     fprintf(output_file,"P5 %d %d 255\n",256,256);
-    fwrite(pixels,256*256,1,output_file);
+    fwrite(pixels,1,ROWS*COLS,output_file);
 
 
     // Close files
