@@ -197,7 +197,7 @@ void calculateCamera(float xAngle, float yAngle, float zAngle, float *camera, fl
     }
 }
 
-float *sumVectors(float vector1[3], float vector2[3], float result[3]){
+void sumVectors(float vector1[3], float vector2[3], float result[3]){
     for(int i=0; i<3; i++){
         result[i] = vector1[i]+vector2[i];
     }
@@ -384,26 +384,106 @@ int main(int argc, char *argv[]) {
     printf("camera top/bottom/topleft: \t(%0.1f %0.1f %0.1f) \t\t(%0.1f %0.1f %0.1f) \t(%0.1f %0.1f %0.1f)\n", top[0], top[1], top[2], bottom[0], bottom[1], bottom[2], topleft[0], topleft[1], topleft[2]);
 
 
-    // Step 10: Render pixels
-    // (To be implemented)
-    float zbuffer = 999999;
+// Step 10: Render pixels
+unsigned char *pixelData = (unsigned char *)calloc(ROWS * COLS, sizeof(unsigned char));
+
+float **image = (float **)calloc(ROWS * COLS, sizeof(float *));
+for (int i = 0; i < ROWS * COLS; i++) {
+    image[i] = (float *)calloc(3, sizeof(float));
+}
+
+float *zBuff = (float *)calloc(ROWS * COLS, sizeof(float));
+
+// Define the plane array
+float** plane = (float**)calloc(faces,sizeof(float*));
+for(i = 0; i < faces; i++) {
+    plane[i] = (float*)calloc(4, sizeof(float));
+}
+    
+printf("Rendering... ");
+
+for (int r = 0; r < ROWS; r++) {
+    for (int c = 0; c < COLS; c++) {
+        int p = r * COLS + c; // Current pixel index
+
+        if (c == 0)
+            printf("%d ", r);
+
+        zBuff[p] = 999999;
+
+        // Calculate 3D coordinates for the pixel
+        for (int i = 0; i < 3; i++) {
+            image[p][i] = topleft[i] + ((float)c / (COLS - 1)) * (right[i] - left[i]) + ((float)r / (ROWS - 1)) * (bottom[i] - top[i]);
+        }
+
+        // Check intersection with each triangle
+        for (int f = 0; f < num_faces; f++) {
+            subVectors(vertex[face[f].V1], vertex[face[f].V0], tmpV1);
+            subVectors(vertex[face[f].V2], vertex[face[f].V0], tmpV2);
+            crossProduct(tmpV1,tmpV2,plane[f]);
+
+            // Calculate n and d
+            float n = -(A * camera[0] + B * camera[1] + C * camera[2] + D);
+            float d = A * (image[p][0] - camera[0]) + B * (image[p][1] - camera[1]) + C * (image[p][2] - camera[2]);
+
+            if (fabs(d) < 0.01) {
+                continue; // Skip triangle if d is near zero
+            }
+
+            // Calculate intersection point
+            float t = n / d;
+            float intersect[3];
+            for (int i = 0; i < 3; i++) {
+                intersect[i] = camera[i] + t * (image[p][i] - camera[i]);
+            }
+            
+            // Check if intersection point is inside triangle
+            float dot1;// = dotProduct(CP1, CP2);
+            float dot2;// = dotProduct(CP1, CP3);
+            float dot3;// = dotProduct(CP2, CP3);
+
+            if (dot1 < 0 || dot2 < 0 || dot3 < 0) {
+                continue; // Skip triangle if intersection point is outside
+            }
+
+            // Update z-buffer and pixel data
+            if (t < zBuff[p]) {
+                zBuff[p] = t;
+                pixelData[p] = 155 + (f % 100);
+            }
+        }
+    }
+}
+
+
+    /*float zbuffer = 999999;
     printf("Rendering...\n");
     unsigned char *pixels = (unsigned char *)calloc(ROWS*COLS,1);
+    float *img;
     for(int r = 0; r<ROWS; r++){
         printf("%d ", r);
         for(int c = 0; c<COLS; c++){
             float zbuffer = 999999;     //reset for every pixel, stores dist to closest tri
+            //need to calc vector coords for image
+            float *sub1;
+            float *sub2;
+            float *add;
+            subVectors(right, left, sub1);
+            subVectors(bottom, top, sub2);
+            sumVectors(multVector((c/(COLS-1)), sub1), multVector((r/(ROWS-1)), sub2), add);
+            sumVectors(topleft, add, img);
             for(int i=0; i<num_faces; i++){
 
             }
         }
-    }
+    }*/
+
 
 
 
     // Step 11: Write ppm image
     fprintf(output_file,"P5 %d %d 255\n",256,256);
-    fwrite(pixels,1,ROWS*COLS,output_file);
+    fwrite(pixelData,ROWS*COLS, 1,output_file);
 
 
     // Close files
