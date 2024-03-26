@@ -197,7 +197,7 @@ void calculateCamera(float xAngle, float yAngle, float zAngle, float *camera, fl
     }
 }
 
-void sumVectors(float vector1[3], float vector2[3], float result[3]){
+float *sumVectors(float vector1[3], float vector2[3], float result[3]){
     for(int i=0; i<3; i++){
         result[i] = vector1[i]+vector2[i];
     }
@@ -382,116 +382,86 @@ int main(int argc, char *argv[]) {
     determineImageBounds(center, camera, up, E, ROWS/COLS, left, right, top, bottom, topleft);
     printf("camera left/right: \t\t(%0.1f %0.1f %0.1f) \t(%0.1f %0.1f %0.1f)\n", left[0], left[1], left[2], right[0], right[1], right[2]);
     printf("camera top/bottom/topleft: \t(%0.1f %0.1f %0.1f) \t\t(%0.1f %0.1f %0.1f) \t(%0.1f %0.1f %0.1f)\n", top[0], top[1], top[2], bottom[0], bottom[1], bottom[2], topleft[0], topleft[1], topleft[2]);
+  
+  
+    // Step 10: Render pixels
+    float top2[2], bottom2[2];
+    top2[0] = top[0];
+    top2[1] = top[1];
+    top2[2] = top[2];
+    bottom2[0] = bottom[0];
+    bottom2[1] = bottom[1];
+    bottom2[2] = bottom[2];
+    int r,c,pixelnum;
+    unsigned char *pixels;
+    float A, B, C, D, n, d, dot1, dot2, dot3, cdiv, rdiv;
+    float zbuffer, image[3], v0[3], v1[3], v2[3], intersect[3], cross1[3], cross2[3];
+    pixels = (unsigned char *)calloc(ROWS*COLS,1);
+    pixelnum = -1;
 
+    for(r = 0; r < ROWS; r++){
+        for(c = 0; c < COLS; c++){
+            pixelnum++;
+            zbuffer = 9999999;
+            cdiv = (float)c/(float)(COLS -1);
+            rdiv = (float)r/(float)(ROWS -1);
+            image[0] = topleft[0] + (cdiv*(right[0]-left[0])) + (rdiv*(bottom2[0]-top2[0]));
+            image[1] = topleft[1] + (cdiv*(right[1]-left[1])) + (rdiv*(bottom2[1]-top2[1]));
+            image[2] = topleft[2] + (cdiv*(right[2]-left[2])) + (rdiv*(bottom2[2]-top2[2]));
 
-// Step 10: Render pixels
-unsigned char *pixelData = (unsigned char *)calloc(ROWS * COLS, sizeof(unsigned char));
+            for(i = 0; i < num_faces; i++){
+                //get triangle points
+                v0[0] = vertices[faces[i*4+1]*3];
+                v0[1] = vertices[faces[i*4+1]*3+1];
+                v0[2] = vertices[faces[i*4+1]*3+2];
+                v1[0] = vertices[faces[i*4+2]*3];
+                v1[1] = vertices[faces[i*4+2]*3+1];
+                v1[2] = vertices[faces[i*4+2]*3+2];
+                v2[0] = vertices[faces[i*4+3]*3];
+                v2[1] = vertices[faces[i*4+3]*3+1];
+                v2[2] = vertices[faces[i*4+3]*3+2];
+                //printf("v0: <%f, %f, %f>\n",v0[0],v0[1],v0[2]);
+                //printf("v1: <%f, %f, %f>\n",v1[0],v1[1],v1[2]);
+                //printf("v2: <%f, %f, %f> %d\n",v2[0],v2[1],v2[2],i);
 
-float **image = (float **)calloc(ROWS * COLS, sizeof(float *));
-for (int i = 0; i < ROWS * COLS; i++) {
-    image[i] = (float *)calloc(3, sizeof(float));
-}
+                //find the plane equation
+                A = (v1[1] - v0[1])*(v2[2] - v0[2]) - (v1[2] - v0[2])*(v2[1] - v0[1]);
+                B = (v1[2] - v0[2])*(v2[0] - v0[0]) - (v1[0] - v0[0])*(v2[2] - v0[2]);
+                C = (v1[0] - v0[0])*(v2[1] - v0[1]) - (v1[1] - v0[1])*(v2[0] - v0[0]);
+                D = -1*A*v0[0] + -1*B*v0[1] + -1*C*v0[2];
 
-float *zBuff = (float *)calloc(ROWS * COLS, sizeof(float));
+                n = -1*A*camera[0] + -1*B*camera[1] + -1*C*camera[2] - D;
+                d = A*(image[0] - camera[0]) + B*(image[1] - camera[1]) + C*(image[2] - camera[2]);
+                if(fabs(d) < 0.01) {
+                    continue; 
+                }
+                //if(r == 0 && c == 0) printf("n = %f, d = %f\n", n, d);
 
-// Define the plane array
-float** plane = (float**)calloc(faces,sizeof(float*));
-for(i = 0; i < faces; i++) {
-    plane[i] = (float*)calloc(4, sizeof(float));
-}
-    
-printf("Rendering... ");
+                //need to find intersecting coordinates, and determine whether or not we see triangle
+                //TODO
 
-for (int r = 0; r < ROWS; r++) {
-    for (int c = 0; c < COLS; c++) {
-        int p = r * COLS + c; // Current pixel index
-
-        if (c == 0)
-            printf("%d ", r);
-
-        zBuff[p] = 999999;
-
-        // Calculate 3D coordinates for the pixel
-        for (int i = 0; i < 3; i++) {
-            image[p][i] = topleft[i] + ((float)c / (COLS - 1)) * (right[i] - left[i]) + ((float)r / (ROWS - 1)) * (bottom[i] - top[i]);
-        }
-
-        // Check intersection with each triangle
-        for (int f = 0; f < num_faces; f++) {
-            subVectors(vertex[face[f].V1], vertex[face[f].V0], tmpV1);
-            subVectors(vertex[face[f].V2], vertex[face[f].V0], tmpV2);
-            crossProduct(tmpV1,tmpV2,plane[f]);
-
-            // Calculate n and d
-            float n = -(A * camera[0] + B * camera[1] + C * camera[2] + D);
-            float d = A * (image[p][0] - camera[0]) + B * (image[p][1] - camera[1]) + C * (image[p][2] - camera[2]);
-
-            if (fabs(d) < 0.01) {
-                continue; // Skip triangle if d is near zero
-            }
-
-            // Calculate intersection point
-            float t = n / d;
-            float intersect[3];
-            for (int i = 0; i < 3; i++) {
-                intersect[i] = camera[i] + t * (image[p][i] - camera[i]);
-            }
-            
-            // Check if intersection point is inside triangle
-            float dot1;// = dotProduct(CP1, CP2);
-            float dot2;// = dotProduct(CP1, CP3);
-            float dot3;// = dotProduct(CP2, CP3);
-
-            if (dot1 < 0 || dot2 < 0 || dot3 < 0) {
-                continue; // Skip triangle if intersection point is outside
-            }
-
-            // Update z-buffer and pixel data
-            if (t < zBuff[p]) {
-                zBuff[p] = t;
-                pixelData[p] = 155 + (f % 100);
+                if(dot1 >= 0 && dot2 >= 0 && dot3 >= 0){
+                    if((n/d) < zbuffer){
+                    zbuffer = (n/d);
+                    pixels[r*COLS+c] = 155 + (i%100);
+                    }
+                }
             }
         }
     }
-}
-
-
-    /*float zbuffer = 999999;
-    printf("Rendering...\n");
-    unsigned char *pixels = (unsigned char *)calloc(ROWS*COLS,1);
-    float *img;
-    for(int r = 0; r<ROWS; r++){
-        printf("%d ", r);
-        for(int c = 0; c<COLS; c++){
-            float zbuffer = 999999;     //reset for every pixel, stores dist to closest tri
-            //need to calc vector coords for image
-            float *sub1;
-            float *sub2;
-            float *add;
-            subVectors(right, left, sub1);
-            subVectors(bottom, top, sub2);
-            sumVectors(multVector((c/(COLS-1)), sub1), multVector((r/(ROWS-1)), sub2), add);
-            sumVectors(topleft, add, img);
-            for(int i=0; i<num_faces; i++){
-
-            }
-        }
-    }*/
-
 
 
 
     // Step 11: Write ppm image
     fprintf(output_file,"P5 %d %d 255\n",256,256);
-    fwrite(pixelData,ROWS*COLS, 1,output_file);
+    fwrite(pixels,1,ROWS*COLS,output_file);
 
 
     // Close files
     fclose(input_file);
-    fclose(output_file);
     free(output_filename);
     free(vertices);
     free(faces);
-
+    fclose(output_file);
     return 0;
 }
