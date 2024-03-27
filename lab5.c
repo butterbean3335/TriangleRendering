@@ -25,7 +25,6 @@
  *          -> determine if we see the triangle
  * 11) write ppm image
 */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -161,7 +160,8 @@ void calculateCamera(float xAngle, float yAngle, float zAngle, float *camera, fl
     float rotateXMatrix[3][3] = {{1, 0, 0}, {0, cos(xRad), -sin(xRad)}, {0, sin(xRad), cos(xRad)}};
     float rotateYMatrix[3][3] = {{cos(yRad), 0, sin(yRad)}, {0, 1, 0}, {-sin(yRad), 0, cos(yRad)}};
     float rotateZMatrix[3][3] = {{cos(zRad), -sin(zRad), 0}, {sin(zRad), cos(zRad), 0}, {0, 0, 1}};
-    
+
+
     float cameraRotated[3] = {0, 0, 0};
     float upRotated[3] = {0, 0, 0};
     int row, col;
@@ -263,6 +263,19 @@ void determineImageBounds(float *center, float *camera, float *up, float E, floa
     }
 }
 
+void posZeros(float matrix[3][3]) 
+{
+    for(int i = 0; i < 3; i++) {
+        for(int j = 0; j < 3; j++) {
+            if(matrix[i][j] > 0 && matrix[i][j] < 0.0001)
+                matrix[i][j] = 0;
+            if(matrix[i][j] < 0 && (0 - matrix[i][j]) < 0.0001 )
+                matrix[i][j] *= -1;
+            if(matrix[i][j] == 0)
+                matrix[i][j] = 0;
+        }
+    }
+}
 
 
 int main(int argc, char *argv[]) {
@@ -367,7 +380,7 @@ int main(int argc, char *argv[]) {
     float camera[3] = {1, 0, 0};
     float up[3] = {0, 0, 1};
     calculateCamera(atof(argv[2]), atof(argv[3]), atof(argv[4]), camera, up);
-
+    printf("Camera-> X: %f\tY: %f\tZ: %f\n",camera[0],camera[1],camera[2]);
 
     // Step 8: Move and scale the camera
     for(i = 0; i < 3; i++) {
@@ -392,23 +405,23 @@ int main(int argc, char *argv[]) {
     bottom2[0] = bottom[0];
     bottom2[1] = bottom[1];
     bottom2[2] = bottom[2];
-    int r,c,pixelnum;
+    int r,c;
     unsigned char *pixels;
     float A, B, C, D, n, d, dot1, dot2, dot3, cdiv, rdiv;
     float zbuffer, image[3], v0[3], v1[3], v2[3], intersect[3], cross1[3], cross2[3];
     pixels = (unsigned char *)calloc(ROWS*COLS,1);
-    pixelnum = -1;
-
-    for(r = 0; r < ROWS; r++){
-        for(c = 0; c < COLS; c++){
-            pixelnum++;
+                
+    float diff1[3], diff2[3];
+    int color, maxColor;
+    printf("Rendering...\n");
+    for(int p = 0; p < ROWS*COLS; p++) {
+            r = p/ROWS;
+            c = p%COLS;
             zbuffer = 9999999;
-            cdiv = (float)c/(float)(COLS -1);
-            rdiv = (float)r/(float)(ROWS -1);
-            image[0] = topleft[0] + (cdiv*(right[0]-left[0])) + (rdiv*(bottom2[0]-top2[0]));
-            image[1] = topleft[1] + (cdiv*(right[1]-left[1])) + (rdiv*(bottom2[1]-top2[1]));
-            image[2] = topleft[2] + (cdiv*(right[2]-left[2])) + (rdiv*(bottom2[2]-top2[2]));
-
+            if(c == 0) printf("%d ", r);
+            for(i = 0; i < 3; i++) {
+                image[i] = topleft[i] + ((float)c/(COLS-1))*(right[i]-left[i]) + ((float)r/(ROWS-1))*(bottom[i]-top[i]);
+            }
             for(i = 0; i < num_faces; i++){
                 //get triangle points
                 v0[0] = vertices[faces[i*4+1]*3];
@@ -435,26 +448,53 @@ int main(int argc, char *argv[]) {
                 if(fabs(d) < 0.01) {
                     continue; 
                 }
-                //if(r == 0 && c == 0) printf("n = %f, d = %f\n", n, d);
 
-                //need to find intersecting coordinates, and determine whether or not we see triangle
-                //TODO
+                intersect[0] = camera[0] + (n/d)*(image[0] - camera[0]);
+                intersect[1] = camera[1] + (n/d)*(image[1] - camera[1]);
+                intersect[2] = camera[2] + (n/d)*(image[2] - camera[2]);
 
-                if(dot1 >= 0 && dot2 >= 0 && dot3 >= 0){
-                    if((n/d) < zbuffer){
+                subVectors(v2, v0, diff1);
+                subVectors(v1, v0, diff2);
+                crossProduct(diff1, diff2, cross1);
+                subVectors(intersect, v0, diff1);
+                subVectors(v1, v0, diff2);
+                crossProduct(diff1, diff2, cross2);
+                dot1 = cross1[0]*cross2[0] + cross1[1]*cross2[1] + cross1[2]*cross2[2];
+                //if(r == 0 && c == 0) printf("dot1: %f\n", dot1);
+
+                subVectors(v0, v1, diff1);
+                subVectors(v2, v1, diff2);
+                crossProduct(diff1, diff2, cross1);
+                subVectors(intersect, v1, diff1);
+                crossProduct(diff1, diff2, cross2);
+                dot2 = cross1[0]*cross2[0] + cross1[1]*cross2[1] + cross1[2]*cross2[2];
+                //if(r == 0 && c == 0) printf("dot2: %f\n", dot2);
+
+                subVectors(v1, v2, diff1);
+                subVectors(v0, v2, diff2);
+                crossProduct(diff1, diff2, cross1);
+                subVectors(intersect, v2, diff1);
+                crossProduct(diff1, diff2, cross2);
+                dot3 = cross1[0]*cross2[0] + cross1[1]*cross2[1] + cross1[2]*cross2[2];
+                //if(r == 0 && c == 0) printf("dot3: %f\n", dot3);
+                
+                //if(r == 0 && c == 0) printf("DOT 1: %f, DOT 2: %f, DOT 3: %f\n", dot1, dot2, dot3);
+
+                if(dot1 < 0 || dot2 < 0 || dot3 < 0) {
+                    continue; // skip triangle
+                } 
+                
+                if( zbuffer < (n/d))
                     zbuffer = (n/d);
-                    pixels[r*COLS+c] = 155 + (i%100);
-                    }
-                }
+                pixels[r*COLS+c] = 155 + (i%100);
             }
         }
-    }
 
 
 
     // Step 11: Write ppm image
-    fprintf(output_file,"P5 %d %d 255\n",256,256);
-    fwrite(pixels,1,ROWS*COLS,output_file);
+    fprintf(output_file,"P5 %d %d 255\n",COLS,ROWS);
+    fwrite(pixels,COLS*ROWS,sizeof(unsigned char),output_file);
 
 
     // Close files
